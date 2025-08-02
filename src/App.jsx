@@ -5,7 +5,7 @@ import * as THREE from 'three';
 const GAME_LEVELS = [
   null, // Index 0 reserved for menu state
   {
-    name: "Test Level",
+    name: "Getting Started",
     platforms: [
       // Simple large platform for testing - made smaller and positioned better
       { pos: [0, 0, 5], size: [15, 1, 15], color: 0x4a90e2 },
@@ -19,7 +19,7 @@ const GAME_LEVELS = [
     obstacles: []
   },
   {
-    name: "Marble Adventure",
+    name: "Call to Adventure",
     platforms: [
       // Main starting platform
       { pos: [0, 0, 0], size: [12, 1, 8], color: 0x4a90e2 },
@@ -54,6 +54,75 @@ const GAME_LEVELS = [
       { pos: [-3, 0.5, 22], size: [1, 1, 1], color: 0xe74c3c },
       { pos: [2, 3.5, 35], size: [1, 1, 1], color: 0xe74c3c },
     ]
+  },
+  {
+    name: "Belly of the Beast",
+    platforms: [
+      // Starting platform - smaller than usual to set the tone
+      { pos: [0, 0, 0], size: [8, 1, 6], color: 0x4a90e2 },
+      
+      // First challenging section - small stepping stones
+      { pos: [8, 1, 8], size: [1.5, 1, 1.5], color: 0xf39c12 },
+      { pos: [12, 2, 15], size: [1.2, 1, 1.2], color: 0xf39c12 },
+      { pos: [15, 3, 22], size: [1, 1, 1], color: 0xe74c3c },
+      
+      // Elevated narrow bridge section
+      { pos: [18, 4, 30], size: [2, 1, 8], color: 0x9b59b6 },
+      { pos: [25, 5, 38], size: [1.5, 1, 1.5], color: 0xe74c3c },
+      
+      // Long dangerous gap with tiny platforms
+      { pos: [30, 6, 45], size: [1, 1, 1], color: 0xe74c3c },
+      { pos: [35, 7, 52], size: [1.2, 1, 1.2], color: 0xf39c12 },
+      { pos: [40, 8, 60], size: [1, 1, 1], color: 0xe74c3c },
+      
+      // Mid-level checkpoint platform
+      { pos: [45, 9, 68], size: [6, 1, 4], color: 0x2ecc71 },
+      
+      // Descent section with tricky jumps
+      { pos: [52, 8, 75], size: [1.5, 1, 1.5], color: 0xf39c12 },
+      { pos: [58, 7, 82], size: [1, 1, 1], color: 0xe74c3c },
+      { pos: [62, 6, 88], size: [1.2, 1, 1.2], color: 0xf39c12 },
+      
+      // Zigzag section
+      { pos: [65, 5, 95], size: [2, 1, 2], color: 0x9b59b6 },
+      { pos: [70, 4, 100], size: [1.5, 1, 1.5], color: 0xe74c3c },
+      { pos: [75, 3, 105], size: [1, 1, 1], color: 0xe74c3c },
+      
+      // Side route with extra challenge
+      { pos: [80, 2, 110], size: [1.5, 1, 1.5], color: 0xf39c12 },
+      { pos: [85, 1, 115], size: [1, 1, 1], color: 0xe74c3c },
+      
+      // Final approach - series of small platforms
+      { pos: [88, 0, 120], size: [1.2, 1, 1.2], color: 0xf39c12 },
+      { pos: [90, 1, 125], size: [1, 1, 1], color: 0xe74c3c },
+      { pos: [92, 2, 130], size: [1.5, 1, 1.5], color: 0xe74c3c },
+      
+      // Final platform before finish
+      { pos: [95, 3, 135], size: [4, 1, 4], color: 0x9b59b6 },
+      
+      // Additional challenging red pillar platforms (jumpable tops)
+      { pos: [10, 2.5, 12], size: [1, 1, 1], color: 0xe74c3c },
+      { pos: [20, 5.5, 32], size: [1, 1, 1], color: 0xe74c3c },
+      { pos: [32, 7.5, 48], size: [1, 1, 1], color: 0xe74c3c },
+      { pos: [48, 9.5, 70], size: [1, 1, 1], color: 0xe74c3c },
+      { pos: [60, 7.5, 85], size: [1, 1, 1], color: 0xe74c3c },
+      { pos: [72, 4.5, 102], size: [1, 1, 1], color: 0xe74c3c },
+      { pos: [82, 2.5, 112], size: [1, 1, 1], color: 0xe74c3c },
+      { pos: [89, 1.5, 122], size: [1, 1, 1], color: 0xe74c3c },
+    ],
+    start: [0, 2, -5],
+    finish: [95, 5, 145], // High finish requiring a final jump
+    obstacles: [
+      // Strategic obstacles to increase difficulty
+      { pos: [10, 2, 12], size: [1, 3, 1], color: 0x8b4513 },
+      { pos: [20, 5, 32], size: [1, 2, 1], color: 0x8b4513 },
+      { pos: [32, 7, 48], size: [1, 2, 1], color: 0x8b4513 },
+      { pos: [48, 9, 70], size: [1, 3, 1], color: 0x8b4513 },
+      { pos: [60, 7, 85], size: [1, 2, 1], color: 0x8b4513 },
+      { pos: [72, 4, 102], size: [1, 2, 1], color: 0x8b4513 },
+      { pos: [82, 2, 112], size: [1, 3, 1], color: 0x8b4513 },
+      { pos: [89, 1, 122], size: [1, 2, 1], color: 0x8b4513 },
+    ]
   }
 ];
 
@@ -76,7 +145,7 @@ const MarbleGame = () => {
   const [gameState, setGameState] = useState('menu');
   const [currentLevel, setCurrentLevel] = useState(0);
   const [time, setTime] = useState(0);
-  const [bestTimes, setBestTimes] = useState({ 1: null, 2: null }); // Level 1 = Test Level, Level 2 = Marble Adventure
+  const [bestTimes, setBestTimes] = useState({ 1: null, 2: null, 3: null }); // Level 1 = Getting Started, Level 2 = Call to Adventure, Level 3 = Belly of the Beast
   const [canJumpDisplay, setCanJumpDisplay] = useState(true);
 
   const loadLevel = useCallback(() => {
