@@ -783,43 +783,58 @@ const MarbleGame = () => {
         </div>
         
         {/* Main content */}
-        <div className="relative z-10 min-h-screen flex items-center justify-center py-8">
-          <div className="text-center text-white max-w-2xl mx-auto px-4 w-full">
-            {/* Game title with glow effect */}
-            <div className="mb-8">
-              <h1 className="text-5xl md:text-6xl font-black mb-3 bg-gradient-to-r from-cyan-400 via-violet-400 to-purple-400 bg-clip-text text-transparent drop-shadow-2xl animate-pulse">
+        <div className="relative z-10 min-h-screen flex items-center justify-center py-2">
+          <div className="text-center text-white max-w-4xl mx-auto px-4 w-full">
+            {/* Game title with glow effect - more compact */}
+            <div className="mb-3">
+              <h1 className="text-3xl md:text-4xl font-black mb-1 bg-gradient-to-r from-cyan-400 via-violet-400 to-purple-400 bg-clip-text text-transparent drop-shadow-2xl animate-pulse">
                 MARBLE
               </h1>
-              <h2 className="text-3xl md:text-4xl font-bold text-white/90 tracking-wider mb-4">
+              <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-wider mb-2">
                 ADVENTURE
               </h2>
-              <div className="w-24 h-1 bg-gradient-to-r from-cyan-400 to-purple-400 mx-auto rounded-full shadow-lg shadow-purple-500/50"></div>
+              <div className="w-16 h-1 bg-gradient-to-r from-cyan-400 to-purple-400 mx-auto rounded-full shadow-lg shadow-purple-500/50"></div>
             </div>
             
-            <p className="text-lg mb-8 text-gray-300 leading-relaxed">
-              Navigate your marble through a stunning 3D world.<br/>
-              Master physics, avoid obstacles, and race against time!
+            <p className="text-sm mb-3 text-gray-300 leading-relaxed">
+              Navigate your marble through a stunning 3D world. Master physics, avoid obstacles, and race against time!
             </p>
             
-            {/* Level Selection */}
-            <div className="space-y-4 mb-8">
+            {/* Controls - more compact */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm mb-3">
+              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
+                <div className="text-cyan-300 font-semibold mb-1 text-xs">MOVEMENT</div>
+                <div className="text-gray-300 text-xs">WASD or Arrow Keys</div>
+              </div>
+              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
+                <div className="text-purple-300 font-semibold mb-1 text-xs">JUMP</div>
+                <div className="text-gray-300 text-xs">J</div>
+              </div>
+              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
+                <div className="text-yellow-300 font-semibold mb-1 text-xs">OBJECTIVE</div>
+                <div className="text-gray-300 text-xs">Reach the finish!</div>
+              </div>
+            </div>
+            
+            {/* Level Selection - more compact */}
+            <div className="space-y-2">
               {GAME_LEVELS.map((level, index) => {
                 // Skip the null entry at index 0
                 if (!level) return null;
                 
                 return (
-                  <div key={index} className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-2xl shadow-purple-500/20">
-                    <div className="flex items-center justify-center mb-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-purple-500 rounded-full flex items-center justify-center shadow-lg">
-                        <div className="w-8 h-8 bg-white rounded-full shadow-inner"></div>
+                  <div key={index} className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl rounded-xl p-3 border border-white/20 shadow-xl shadow-purple-500/20">
+                    <div className="flex items-center justify-center mb-1">
+                      <div className="w-6 h-6 bg-gradient-to-br from-cyan-400 to-purple-500 rounded-full flex items-center justify-center shadow-lg">
+                        <div className="w-4 h-4 bg-white rounded-full shadow-inner"></div>
                       </div>
                     </div>
                     
-                    <h3 className="text-2xl font-bold mb-3 text-cyan-300">{level.name}</h3>
+                    <h3 className="text-lg font-bold mb-1 text-cyan-300">{level.name}</h3>
                     
                     {bestTimes[index] && (
-                      <div className="bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-lg p-2 mb-4 border border-yellow-400/30">
-                        <p className="text-yellow-300 text-sm font-semibold">
+                      <div className="bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-lg p-1 mb-2 border border-yellow-400/30">
+                        <p className="text-yellow-300 text-xs font-semibold">
                           🏆 Best: {bestTimes[index].toFixed(2)}s
                         </p>
                       </div>
@@ -827,7 +842,7 @@ const MarbleGame = () => {
                     
                     <button
                       onClick={() => startGame(index)}
-                      className="group relative w-full px-8 py-3 bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 rounded-xl text-white font-bold text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/40 active:scale-95"
+                      className="group relative w-full px-4 py-2 bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 rounded-xl text-white font-bold text-sm transition-all duration-300 transform hover:scale-105 hover:shadow-xl hover:shadow-purple-500/40 active:scale-95"
                     >
                       <span className="relative z-10">PLAY LEVEL</span>
                       <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl blur-xl"></div>
@@ -835,22 +850,6 @@ const MarbleGame = () => {
                   </div>
                 );
               })}
-            </div>
-            
-            {/* Controls */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-white/10">
-                <div className="text-cyan-300 font-semibold mb-2">MOVEMENT</div>
-                <div className="text-gray-300">WASD or Arrow Keys</div>
-              </div>
-              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-white/10">
-                <div className="text-purple-300 font-semibold mb-2">JUMP</div>
-                <div className="text-gray-300">J</div>
-              </div>
-              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-white/10">
-                <div className="text-yellow-300 font-semibold mb-2">OBJECTIVE</div>
-                <div className="text-gray-300">Reach the finish!</div>
-              </div>
             </div>
           </div>
         </div>
