@@ -943,7 +943,7 @@ const MarbleGame = () => {
 
   if (gameState === 'menu') {
     return (
-      <div className="fixed inset-0 w-screen h-screen overflow-y-auto">
+      <div className="fixed inset-0 w-screen h-screen overflow-hidden">
         {/* Animated background - fixed to viewport */}
         <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-600/20 via-purple-600/20 to-transparent"></div>
@@ -970,57 +970,61 @@ const MarbleGame = () => {
           ))}
         </div>
         
-        {/* Main content - scrollable */}
-        <div className="relative z-10 min-h-screen py-4">
-          <div className="text-center text-white max-w-4xl mx-auto px-4">
-            {/* Game title with glow effect - more compact */}
-            <div className="mb-3">
-              <h1 className="text-3xl md:text-4xl font-black mb-1 bg-gradient-to-r from-cyan-400 via-violet-400 to-purple-400 bg-clip-text text-transparent drop-shadow-2xl animate-pulse">
-                MARBLE
-              </h1>
-              <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-wider mb-2">
-                ADVENTURE
-              </h2>
-              <div className="w-16 h-1 bg-gradient-to-r from-cyan-400 to-purple-400 mx-auto rounded-full shadow-lg shadow-purple-500/50"></div>
+        {/* Main content - mobile optimized */}
+        <div className="relative z-10 h-screen py-2 sm:py-4" style={{paddingTop: 'max(0.5rem, env(safe-area-inset-top))', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))'}}>
+          <div className="text-center text-white max-w-4xl mx-auto px-4 h-full flex flex-col">
+            {/* Header content - flexible */}
+            <div className="flex-shrink-0">
+              {/* Game title with glow effect - more compact */}
+              <div className="mb-2 sm:mb-3">
+                <h1 className="text-3xl md:text-4xl font-black mb-1 bg-gradient-to-r from-cyan-400 via-violet-400 to-purple-400 bg-clip-text text-transparent drop-shadow-2xl animate-pulse">
+                  MARBLE
+                </h1>
+                <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-wider mb-2">
+                  ADVENTURE
+                </h2>
+                <div className="w-16 h-1 bg-gradient-to-r from-cyan-400 to-purple-400 mx-auto rounded-full shadow-lg shadow-purple-500/50"></div>
+              </div>
+              
+              <p className="text-sm mb-2 sm:mb-3 text-gray-300 leading-relaxed">
+                Navigate your marble through a stunning 3D world. Master physics, avoid obstacles, and race against time!
+              </p>
+            
+              {/* Controls - more compact */}
+              {isMobile ? (
+                // Mobile: Simplified two-column layout
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mb-3">
+                  <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
+                    <div className="text-cyan-300 font-semibold mb-1 text-xs">CONTROLS</div>
+                    <div className="text-gray-300 text-xs">Joystick + Jump</div>
+                  </div>
+                  <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
+                    <div className="text-yellow-300 font-semibold mb-1 text-xs">OBJECTIVE</div>
+                    <div className="text-gray-300 text-xs">Reach the finish!</div>
+                  </div>
+                </div>
+              ) : (
+                // Desktop: Three-column layout
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm mb-4">
+                  <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
+                    <div className="text-cyan-300 font-semibold mb-1 text-xs">MOVEMENT</div>
+                    <div className="text-gray-300 text-xs">WASD or Arrow Keys</div>
+                  </div>
+                  <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
+                    <div className="text-purple-300 font-semibold mb-1 text-xs">JUMP</div>
+                    <div className="text-gray-300 text-xs">J</div>
+                  </div>
+                  <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
+                    <div className="text-yellow-300 font-semibold mb-1 text-xs">OBJECTIVE</div>
+                    <div className="text-gray-300 text-xs">Reach the finish!</div>
+                  </div>
+                </div>
+              )}
             </div>
             
-            <p className="text-sm mb-3 text-gray-300 leading-relaxed">
-              Navigate your marble through a stunning 3D world. Master physics, avoid obstacles, and race against time!
-            </p>
-            
-            {/* Controls - more compact */}
-            {isMobile ? (
-              // Mobile: Simplified two-column layout
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mb-4">
-                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
-                  <div className="text-cyan-300 font-semibold mb-1 text-xs">CONTROLS</div>
-                  <div className="text-gray-300 text-xs">Joystick + Jump</div>
-                </div>
-                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
-                  <div className="text-yellow-300 font-semibold mb-1 text-xs">OBJECTIVE</div>
-                  <div className="text-gray-300 text-xs">Reach the finish!</div>
-                </div>
-              </div>
-            ) : (
-              // Desktop: Three-column layout
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm mb-4">
-                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
-                  <div className="text-cyan-300 font-semibold mb-1 text-xs">MOVEMENT</div>
-                  <div className="text-gray-300 text-xs">WASD or Arrow Keys</div>
-                </div>
-                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
-                  <div className="text-purple-300 font-semibold mb-1 text-xs">JUMP</div>
-                  <div className="text-gray-300 text-xs">J</div>
-                </div>
-                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
-                  <div className="text-yellow-300 font-semibold mb-1 text-xs">OBJECTIVE</div>
-                  <div className="text-gray-300 text-xs">Reach the finish!</div>
-                </div>
-              </div>
-            )}
-            
-            {/* Level Selection */}
-            <div className="space-y-2 pb-8">
+            {/* Level Selection - Mobile Scrollable */}
+            <div className="h-[392px] sm:h-[440px] overflow-y-auto scrollbar-thin scrollbar-thumb-purple-500/30 scrollbar-track-transparent border border-white/10 rounded-lg bg-white/5 backdrop-blur-sm p-3">
+              <div className="space-y-2 pb-4">
               {GAME_LEVELS.map((level, index) => {
                 // Skip the null entry at index 0
                 if (!level) return null;
@@ -1053,6 +1057,7 @@ const MarbleGame = () => {
                   </div>
                 );
               })}
+              </div>
             </div>
           </div>
         </div>
