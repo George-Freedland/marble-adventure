@@ -147,6 +147,41 @@ const MarbleGame = () => {
   const [time, setTime] = useState(0);
   const [bestTimes, setBestTimes] = useState({ 1: null, 2: null, 3: null }); // Level 1 = Getting Started, Level 2 = Call to Adventure, Level 3 = Belly of the Beast
   const [canJumpDisplay, setCanJumpDisplay] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(false);
+  
+  // Mobile touch controls state
+  const [mobileControls, setMobileControls] = useState({
+    movement: { x: 0, y: 0 }, // Joystick position (-1 to 1)
+    isJoystickActive: false,
+    joystickStartPos: { x: 0, y: 0 },
+    joystickCurrentPos: { x: 0, y: 0 }
+  });
+
+  // Mobile detection and orientation handling
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+      const isMobileDevice = /iPhone|iPad|iPod|Android|BlackBerry|Opera Mini|IEMobile|WPDesktop/i.test(userAgent);
+      setIsMobile(isMobileDevice);
+    };
+
+    const checkOrientation = () => {
+      const isPortraitMode = window.innerHeight > window.innerWidth;
+      setIsPortrait(isPortraitMode);
+    };
+
+    checkMobile();
+    checkOrientation();
+
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+
+    return () => {
+      window.removeEventListener('resize', checkOrientation);
+      window.removeEventListener('orientationchange', checkOrientation);
+    };
+  }, []);
 
   const loadLevel = useCallback(() => {
     const scene = sceneRef.current;
@@ -594,7 +629,7 @@ const MarbleGame = () => {
       state.startTime = Date.now();
     }
 
-    // Movement
+    // Movement - Keyboard
     if (keys['w'] || keys['arrowup']) {
       state.velocity.z += force;
     }
@@ -607,9 +642,88 @@ const MarbleGame = () => {
     if (keys['d'] || keys['arrowright']) {
       state.velocity.x -= force;
     }
+
+    // Movement - Mobile Touch Controls
+    if (isMobile && !isPortrait) {
+      const { movement } = mobileControls;
+      if (Math.abs(movement.x) > 0.1 || Math.abs(movement.y) > 0.1) {
+        // Convert joystick coordinates to game movement
+        // Joystick Y controls forward/backward (Z axis)
+        // Joystick X controls left/right (X axis)
+        state.velocity.z += movement.y * force;
+        state.velocity.x -= movement.x * force; // Negative for correct direction
+      }
+    }
+  }, [gameState, isMobile, isPortrait, mobileControls]);
+
+  // Mobile touch handlers
+  const handleJoystickStart = useCallback((e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = e.currentTarget.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    
+    setMobileControls(prev => ({
+      ...prev,
+      isJoystickActive: true,
+      joystickStartPos: { x: centerX, y: centerY },
+      joystickCurrentPos: { x: touch.clientX, y: touch.clientY }
+    }));
+  }, []);
+
+  const handleJoystickMove = useCallback((e) => {
+    e.preventDefault();
+    if (!mobileControls.isJoystickActive) return;
+    
+    const touch = e.touches[0];
+    const { joystickStartPos } = mobileControls;
+    
+    // Calculate distance from center
+    const deltaX = touch.clientX - joystickStartPos.x;
+    const deltaY = touch.clientY - joystickStartPos.y;
+    
+    // Limit the distance (joystick radius)
+    const maxDistance = 50;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    
+    let normalizedX = deltaX / maxDistance;
+    let normalizedY = deltaY / maxDistance;
+    
+    // Clamp to circle
+    if (distance > maxDistance) {
+      normalizedX = (deltaX / distance) * 1;
+      normalizedY = (deltaY / distance) * 1;
+    }
+    
+    setMobileControls(prev => ({
+      ...prev,
+      joystickCurrentPos: { x: touch.clientX, y: touch.clientY },
+      movement: { x: normalizedX, y: -normalizedY } // Negative Y for correct forward direction
+    }));
+  }, [mobileControls]);
+
+  const handleJoystickEnd = useCallback((e) => {
+    e.preventDefault();
+    setMobileControls(prev => ({
+      ...prev,
+      isJoystickActive: false,
+      movement: { x: 0, y: 0 },
+      joystickStartPos: { x: 0, y: 0 },
+      joystickCurrentPos: { x: 0, y: 0 }
+    }));
+  }, []);
+
+  const handleJumpTouch = useCallback((e) => {
+    e.preventDefault();
+    if (gameState === 'playing' && !gameStateRef.current.finished) {
+      if (gameStateRef.current.canJump) {
+        gameStateRef.current.velocity.y = 19.8;
+        gameStateRef.current.canJump = false;
+        console.log('Jump activated via touch!');
+      }
+    }
   }, [gameState]);
-
-
 
   // Load level when currentLevel changes or when entering playing state
   useEffect(() => {
@@ -865,6 +979,21 @@ const MarbleGame = () => {
 
   return (
     <div className="relative w-full h-screen">
+      {/* Mobile Portrait Orientation Blocker */}
+      {isMobile && isPortrait && (
+        <div className="fixed inset-0 bg-gradient-to-br from-purple-900 to-blue-900 flex flex-col items-center justify-center z-50 text-white text-center p-8">
+          <div className="mb-8">
+            <div className="w-20 h-20 border-4 border-white rounded-lg mb-4 mx-auto flex items-center justify-center">
+              <div className="w-12 h-8 border-2 border-white rounded transform rotate-90"></div>
+            </div>
+            <h1 className="text-3xl font-bold mb-4">Rotate Your Device</h1>
+            <p className="text-lg mb-2">Please rotate your device to landscape mode</p>
+            <p className="text-sm text-gray-300">for the best gaming experience</p>
+          </div>
+          <div className="text-6xl animate-bounce">📱 ↻</div>
+        </div>
+      )}
+      
       <div ref={mountRef} className="w-full h-full" />
       
       {/* Game UI */}
@@ -934,6 +1063,44 @@ const MarbleGame = () => {
           </div>
         );
       })()}
+
+      {/* Mobile Touch Controls - Only show in landscape and during gameplay */}
+      {isMobile && !isPortrait && gameState === 'playing' && (
+        <>
+          {/* Virtual Joystick */}
+          <div 
+            className="absolute bottom-8 left-8 w-24 h-24 bg-white/20 border-2 border-white/40 rounded-full flex items-center justify-center touch-none z-40"
+            onTouchStart={handleJoystickStart}
+            onTouchMove={handleJoystickMove}
+            onTouchEnd={handleJoystickEnd}
+          >
+            <div className="w-16 h-16 bg-white/30 rounded-full flex items-center justify-center">
+              <div 
+                className="w-8 h-8 bg-white/60 rounded-full transition-transform duration-75"
+                style={{
+                  transform: mobileControls.isJoystickActive 
+                    ? `translate(${mobileControls.movement.x * 20}px, ${mobileControls.movement.y * 20}px)`
+                    : 'translate(0px, 0px)'
+                }}
+              />
+            </div>
+            <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-white/60 text-xs font-semibold">
+              MOVE
+            </div>
+          </div>
+
+          {/* Jump Button */}
+          <div 
+            className="absolute bottom-8 right-8 w-20 h-20 bg-purple-500/70 border-2 border-purple-300/60 rounded-full flex items-center justify-center touch-none z-40 active:bg-purple-600/80 transition-colors duration-75"
+            onTouchStart={handleJumpTouch}
+          >
+            <div className="text-white font-bold text-lg">J</div>
+            <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-white/60 text-xs font-semibold">
+              JUMP
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
