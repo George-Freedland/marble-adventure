@@ -1,0 +1,690 @@
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import * as THREE from 'three';
+
+// Move levels outside component to prevent recreation on every render
+const GAME_LEVELS = [
+  {
+    name: "Test Level",
+    platforms: [
+      // Simple large platform for testing
+      { pos: [0, 0, 0], size: [20, 1, 20], color: 0x4a90e2 },
+    ],
+    start: [0, 2, 0],
+    finish: [0, 2, 10],
+    obstacles: []
+  },
+  {
+    name: "Marble Adventure",
+    platforms: [
+      // Main starting platform
+      { pos: [0, 0, 0], size: [12, 1, 8], color: 0x4a90e2 },
+      
+      // First jump section
+      { pos: [0, 0, 15], size: [8, 1, 6], color: 0x4a90e2 },
+      
+      // Elevated platform
+      { pos: [0, 3, 30], size: [10, 1, 8], color: 0xf39c12 },
+      
+      // Bridge section
+      { pos: [0, 3, 45], size: [6, 1, 12], color: 0xf39c12 },
+      
+      // Final platform
+      { pos: [0, 0, 65], size: [12, 1, 8], color: 0x9b59b6 },
+      
+      // Side platforms for exploration
+      { pos: [15, 0, 15], size: [6, 1, 6], color: 0x2ecc71 },
+      { pos: [-15, 0, 30], size: [6, 1, 6], color: 0x2ecc71 },
+      { pos: [20, 3, 45], size: [4, 1, 4], color: 0xe74c3c },
+    ],
+    start: [0, 2, -5],
+    finish: [0, 2, 70],
+    obstacles: [
+      // Some obstacles to make it interesting
+      { pos: [3, 1, 8], size: [1, 2, 1], color: 0xe74c3c },
+      { pos: [-3, 1, 22], size: [1, 2, 1], color: 0xe74c3c },
+      { pos: [2, 4, 35], size: [1, 2, 1], color: 0xe74c3c },
+    ]
+  }
+];
+
+const MarbleGame = () => {
+  const mountRef = useRef(null);
+  const sceneRef = useRef(null);
+  const marbleRef = useRef(null);
+  const cameraRef = useRef(null);
+  const rendererRef = useRef(null);
+  const keysRef = useRef({});
+  const gameStateRef = useRef({
+    velocity: new THREE.Vector3(0, 0, 0),
+    onGround: false,
+    startTime: null,
+    finished: false,
+    canJump: true
+  });
+  
+  const [gameState, setGameState] = useState('menu');
+  const [currentLevel, setCurrentLevel] = useState(0);
+  const [time, setTime] = useState(0);
+  const [bestTimes, setBestTimes] = useState({ 0: null, 1: null });
+
+  const loadLevel = useCallback(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    const level = GAME_LEVELS[currentLevel];
+
+    // Clear existing level
+    const objectsToRemove = scene.children.filter(child => 
+      child.userData.isLevelObject || child.userData.isMarble
+    );
+    objectsToRemove.forEach(obj => scene.remove(obj));
+
+    // Create platforms
+    level.platforms.forEach(platform => {
+      const geometry = new THREE.BoxGeometry(...platform.size);
+      const material = new THREE.MeshLambertMaterial({ 
+        color: platform.color,
+        transparent: true,
+        opacity: 0.9
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(...platform.pos);
+      mesh.receiveShadow = true;
+      mesh.castShadow = true;
+      mesh.userData.isLevelObject = true;
+      mesh.userData.isPlatform = true;
+      scene.add(mesh);
+    });
+
+    // Create obstacles
+    level.obstacles.forEach(obstacle => {
+      const geometry = new THREE.BoxGeometry(...obstacle.size);
+      const material = new THREE.MeshLambertMaterial({ 
+        color: obstacle.color,
+        transparent: true,
+        opacity: 0.8
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(...obstacle.pos);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData.isLevelObject = true;
+      mesh.userData.isObstacle = true;
+      scene.add(mesh);
+    });
+
+    // Create start pad
+    const startGeometry = new THREE.CylinderGeometry(3, 3, 0.3, 32);
+    const startMaterial = new THREE.MeshLambertMaterial({ 
+      color: 0x2ecc71,
+      transparent: true,
+      opacity: 0.9
+    });
+    const startPad = new THREE.Mesh(startGeometry, startMaterial);
+    startPad.position.set(level.start[0], level.start[1] - 1.5, level.start[2]);
+    startPad.receiveShadow = true;
+    startPad.userData.isLevelObject = true;
+    scene.add(startPad);
+
+    // Create finish pad
+    const finishGeometry = new THREE.CylinderGeometry(3, 3, 0.3, 32);
+    const finishMaterial = new THREE.MeshLambertMaterial({ 
+      color: 0xe74c3c,
+      transparent: true,
+      opacity: 0.9
+    });
+    const finishPad = new THREE.Mesh(finishGeometry, finishMaterial);
+    finishPad.position.set(level.finish[0], level.finish[1] - 1.5, level.finish[2]);
+    finishPad.receiveShadow = true;
+    finishPad.userData.isLevelObject = true;
+    finishPad.userData.isFinish = true;
+    scene.add(finishPad);
+
+    // Create marble with better physics
+    const marbleGeometry = new THREE.SphereGeometry(0.6, 32, 32);
+    const marbleMaterial = new THREE.MeshPhongMaterial({ 
+      color: 0xff6b6b,
+      transparent: true,
+      opacity: 0.9,
+      shininess: 100,
+      specular: 0x222222
+    });
+    const marble = new THREE.Mesh(marbleGeometry, marbleMaterial);
+    marble.position.set(...level.start);
+    marble.castShadow = true;
+    marble.userData.isMarble = true;
+    marbleRef.current = marble;
+    scene.add(marble);
+
+    // Reset game state
+    gameStateRef.current = {
+      velocity: new THREE.Vector3(0, 0, 0),
+      onGround: false,
+      startTime: null,
+      finished: false,
+      canJump: true
+    };
+
+    // Position camera
+    const camera = cameraRef.current;
+    camera.position.set(level.start[0], level.start[1] + 12, level.start[2] - 15);
+    camera.lookAt(level.start[0], level.start[1], level.start[2]);
+  }, [currentLevel]);
+
+  const initGame = useCallback(() => {
+    if (!mountRef.current) return;
+
+    // Scene setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb);
+    scene.fog = new THREE.Fog(0x87ceeb, 50, 200);
+    sceneRef.current = scene;
+
+    // Camera
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    cameraRef.current = camera;
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
+    rendererRef.current = renderer;
+    mountRef.current.appendChild(renderer.domElement);
+
+    // Enhanced lighting
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    directionalLight.position.set(20, 30, 10);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.camera.near = 0.5;
+    directionalLight.shadow.camera.far = 100;
+    directionalLight.shadow.camera.left = -50;
+    directionalLight.shadow.camera.right = 50;
+    directionalLight.shadow.camera.top = 50;
+    directionalLight.shadow.camera.bottom = -50;
+    scene.add(directionalLight);
+
+    // Add some point lights for atmosphere
+    const pointLight1 = new THREE.PointLight(0xff6b6b, 0.5, 30);
+    pointLight1.position.set(15, 5, 15);
+    scene.add(pointLight1);
+
+    const pointLight2 = new THREE.PointLight(0x4ecdc4, 0.5, 30);
+    pointLight2.position.set(-15, 5, 30);
+    scene.add(pointLight2);
+
+    loadLevel();
+  }, [loadLevel]);
+
+  const updateCamera = useCallback(() => {
+    const marble = marbleRef.current;
+    const camera = cameraRef.current;
+    if (!marble || !camera) return;
+
+    // Extremely stable camera following
+    const idealOffset = new THREE.Vector3(0, 6, -10);
+    const idealPosition = marble.position.clone().add(idealOffset);
+    
+    // Very slow interpolation
+    camera.position.lerp(idealPosition, 0.005);
+    
+    // Smooth look-at target
+    const lookAtTarget = new THREE.Vector3(
+      marble.position.x,
+      marble.position.y,
+      marble.position.z + 2
+    );
+    camera.lookAt(lookAtTarget);
+  }, []);
+
+  const resetMarble = useCallback(() => {
+    const marble = marbleRef.current;
+    if (!marble) return;
+
+    const level = GAME_LEVELS[currentLevel];
+    marble.position.set(...level.start);
+    gameStateRef.current.velocity.set(0, 0, 0);
+    gameStateRef.current.startTime = Date.now();
+    gameStateRef.current.canJump = true;
+  }, [currentLevel]);
+
+  const checkCollisions = useCallback(() => {
+    const marble = marbleRef.current;
+    const scene = sceneRef.current;
+    if (!marble || !scene) return;
+
+    const marbleRadius = 0.6;
+    const marblePos = marble.position;
+    let onPlatform = false;
+    let closestPlatform = null;
+    let minDistance = Infinity;
+
+    scene.children.forEach(child => {
+      if (child.userData.isPlatform) {
+        const platformPos = child.position;
+        const platformSize = child.geometry.parameters;
+        
+        // Check if marble is above platform
+        const halfHeight = platformSize.height / 2;
+        const halfWidth = platformSize.width / 2;
+        const halfDepth = platformSize.depth / 2;
+        
+        const platformTop = platformPos.y + halfHeight;
+        const platformLeft = platformPos.x - halfWidth;
+        const platformRight = platformPos.x + halfWidth;
+        const platformFront = platformPos.z - halfDepth;
+        const platformBack = platformPos.z + halfDepth;
+        
+        // Check if marble is within platform bounds
+        if (marblePos.x >= platformLeft && marblePos.x <= platformRight &&
+            marblePos.z >= platformFront && marblePos.z <= platformBack) {
+          
+          const distance = marblePos.y - platformTop;
+          // More generous collision detection
+          if (distance <= marbleRadius && distance >= -marbleRadius) {
+            if (distance < minDistance) {
+              minDistance = distance;
+              closestPlatform = child;
+            }
+          }
+        }
+      }
+
+      if (child.userData.isObstacle) {
+        const obstaclePos = child.position;
+        const obstacleSize = child.geometry.parameters;
+        
+        const halfHeight = obstacleSize.height / 2;
+        const halfWidth = obstacleSize.width / 2;
+        const halfDepth = obstacleSize.depth / 2;
+        
+        const obstacleTop = obstaclePos.y + halfHeight;
+        const obstacleBottom = obstaclePos.y - halfHeight;
+        const obstacleLeft = obstaclePos.x - halfWidth;
+        const obstacleRight = obstaclePos.x + halfWidth;
+        const obstacleFront = obstaclePos.z - halfDepth;
+        const obstacleBack = obstaclePos.z + halfDepth;
+        
+        // Check collision with obstacle
+        if (marblePos.x + marbleRadius >= obstacleLeft && marblePos.x - marbleRadius <= obstacleRight &&
+            marblePos.y + marbleRadius >= obstacleBottom && marblePos.y - marbleRadius <= obstacleTop &&
+            marblePos.z + marbleRadius >= obstacleFront && marblePos.z - marbleRadius <= obstacleBack) {
+          
+          // Push marble away from obstacle
+          const direction = marblePos.clone().sub(obstaclePos).normalize();
+          marblePos.add(direction.multiplyScalar(0.1));
+          gameStateRef.current.velocity.multiplyScalar(0.5);
+        }
+      }
+
+      if (child.userData.isFinish) {
+        const finishPos = child.position;
+        const distance = marblePos.distanceTo(finishPos);
+        
+        if (distance < 3 && !gameStateRef.current.finished) {
+          gameStateRef.current.finished = true;
+          const finalTime = (Date.now() - gameStateRef.current.startTime) / 1000;
+          setTime(finalTime);
+          setBestTimes(prev => ({
+            ...prev,
+            [currentLevel]: prev[currentLevel] ? Math.min(prev[currentLevel], finalTime) : finalTime
+          }));
+          setGameState('finished');
+        }
+      }
+    });
+
+    // Handle platform collision
+    if (closestPlatform) {
+      const platformTop = closestPlatform.position.y + closestPlatform.geometry.parameters.height / 2;
+      
+      // Keep marble on platform
+      if (marblePos.y - marbleRadius <= platformTop + 0.1) {
+        marblePos.y = platformTop + marbleRadius;
+        
+        if (gameStateRef.current.velocity.y <= 0) {
+          gameStateRef.current.velocity.y = 0;
+          onPlatform = true;
+          gameStateRef.current.canJump = true;
+        }
+      }
+    }
+
+    gameStateRef.current.onGround = onPlatform;
+
+    // Fall detection - more forgiving
+    if (marblePos.y < -5) {
+      resetMarble();
+    }
+  }, [currentLevel, setBestTimes, setTime, setGameState, resetMarble]);
+
+  const updatePhysics = useCallback(() => {
+    const marble = marbleRef.current;
+    if (!marble) return;
+
+    const state = gameStateRef.current;
+    
+    // Much weaker gravity (was 0.002, now 0.0005)
+    if (!state.onGround) {
+      state.velocity.y -= 0.0005;
+    }
+
+    // Reduced friction for faster, more responsive movement
+    state.velocity.x *= 0.98;
+    state.velocity.z *= 0.98;
+    
+    // Lighter ground friction
+    if (state.onGround) {
+      state.velocity.x *= 0.92;
+      state.velocity.z *= 0.92;
+    }
+
+    // Higher max speed for 3x faster movement
+    const maxSpeed = 0.9;
+    if (state.velocity.length() > maxSpeed) {
+      state.velocity.normalize().multiplyScalar(maxSpeed);
+    }
+
+    // Update position
+    const deltaTime = 1/60;
+    const scaledVelocity = state.velocity.clone().multiplyScalar(deltaTime);
+    marble.position.add(scaledVelocity);
+  }, []);
+
+  const handleKeyDown = useCallback((event) => {
+    keysRef.current[event.key.toLowerCase()] = true;
+    
+    if (gameState === 'playing' && event.key === ' ') {
+      if (gameStateRef.current.onGround && gameStateRef.current.canJump) {
+        gameStateRef.current.velocity.y = 0.25; // Much stronger jump (was 0.1)
+        gameStateRef.current.canJump = false;
+        console.log('Jump activated!');
+      }
+      event.preventDefault();
+    }
+  }, [gameState]);
+
+  const handleKeyUp = useCallback((event) => {
+    keysRef.current[event.key.toLowerCase()] = false;
+  }, []);
+
+  const handleInput = useCallback(() => {
+    if (gameState !== 'playing') return;
+
+    const state = gameStateRef.current;
+    const force = 0.003; // 3x faster movement (was 0.001)
+    const keys = keysRef.current;
+
+    if (!state.startTime) {
+      state.startTime = Date.now();
+    }
+
+    // Movement
+    if (keys['w'] || keys['arrowup']) {
+      state.velocity.z += force;
+    }
+    if (keys['s'] || keys['arrowdown']) {
+      state.velocity.z -= force;
+    }
+    if (keys['a'] || keys['arrowleft']) {
+      state.velocity.x += force;
+    }
+    if (keys['d'] || keys['arrowright']) {
+      state.velocity.x -= force;
+    }
+  }, [gameState]);
+
+
+
+  useEffect(() => {
+    initGame();
+    
+    const handleResize = () => {
+      if (cameraRef.current && rendererRef.current) {
+        cameraRef.current.aspect = window.innerWidth / window.innerHeight;
+        cameraRef.current.updateProjectionMatrix();
+        rendererRef.current.setSize(window.innerWidth, window.innerHeight);
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
+    const currentMount = mountRef.current;
+    const currentRenderer = rendererRef.current;
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (currentMount && currentRenderer && currentMount.contains(currentRenderer.domElement)) {
+        currentMount.removeChild(currentRenderer.domElement);
+      }
+    };
+  }, [initGame]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [handleKeyDown, handleKeyUp]);
+
+  useEffect(() => {
+    let lastTime = 0;
+    const animate = (currentTime) => {
+      // Limit updates to 60 FPS max
+      if (currentTime - lastTime > 16) {
+        if (gameState === 'playing') {
+          handleInput();
+          updatePhysics();
+          checkCollisions();
+          updateCamera();
+          
+          // Update timer less frequently to avoid flickering
+          if (gameStateRef.current.startTime && !gameStateRef.current.finished && currentTime % 100 < 16) {
+            setTime((Date.now() - gameStateRef.current.startTime) / 1000);
+          }
+        }
+
+        if (rendererRef.current && sceneRef.current && cameraRef.current) {
+          rendererRef.current.render(sceneRef.current, cameraRef.current);
+        }
+        lastTime = currentTime;
+      }
+      requestAnimationFrame(animate);
+    };
+    animate();
+  }, [gameState, handleInput, updatePhysics, checkCollisions, updateCamera]);
+
+  const startGame = (levelIndex = 0) => {
+    setCurrentLevel(levelIndex);
+    setGameState('playing');
+    setTime(0);
+    setTimeout(() => loadLevel(), 100);
+  };
+
+  const restartLevel = () => {
+    setGameState('playing');
+    setTime(0);
+    resetMarble();
+  };
+
+  const backToMenu = () => {
+    setGameState('menu');
+    setTime(0);
+  };
+
+  if (gameState === 'menu') {
+    return (
+      <div className="fixed inset-0 w-screen h-screen overflow-auto">
+        {/* Animated background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-600/20 via-purple-600/20 to-transparent"></div>
+          <div className="absolute inset-0 opacity-40">
+            <div className="w-full h-full bg-repeat" style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+            }}></div>
+          </div>
+        </div>
+        
+        {/* Floating particles effect */}
+        <div className="absolute inset-0 overflow-hidden">
+          {[...Array(20)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-2 h-2 bg-white/20 rounded-full animate-bounce"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 3}s`,
+                animationDuration: `${2 + Math.random() * 3}s`
+              }}
+            />
+          ))}
+        </div>
+        
+        {/* Main content */}
+        <div className="relative z-10 min-h-screen flex items-center justify-center py-8">
+          <div className="text-center text-white max-w-2xl mx-auto px-4 w-full">
+            {/* Game title with glow effect */}
+            <div className="mb-8">
+              <h1 className="text-5xl md:text-6xl font-black mb-3 bg-gradient-to-r from-cyan-400 via-violet-400 to-purple-400 bg-clip-text text-transparent drop-shadow-2xl animate-pulse">
+                MARBLE
+              </h1>
+              <h2 className="text-3xl md:text-4xl font-bold text-white/90 tracking-wider mb-4">
+                ADVENTURE
+              </h2>
+              <div className="w-24 h-1 bg-gradient-to-r from-cyan-400 to-purple-400 mx-auto rounded-full shadow-lg shadow-purple-500/50"></div>
+            </div>
+            
+            <p className="text-lg mb-8 text-gray-300 leading-relaxed">
+              Navigate your marble through a stunning 3D world.<br/>
+              Master physics, avoid obstacles, and race against time!
+            </p>
+            
+            {/* Level Selection */}
+            <div className="space-y-4 mb-8">
+              {GAME_LEVELS.map((level, index) => (
+                <div key={index} className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-2xl shadow-purple-500/20">
+                  <div className="flex items-center justify-center mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-purple-500 rounded-full flex items-center justify-center shadow-lg">
+                      <div className="w-8 h-8 bg-white rounded-full shadow-inner"></div>
+                    </div>
+                  </div>
+                  
+                  <h3 className="text-2xl font-bold mb-3 text-cyan-300">{level.name}</h3>
+                  
+                  {bestTimes[index] && (
+                    <div className="bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-lg p-2 mb-4 border border-yellow-400/30">
+                      <p className="text-yellow-300 text-sm font-semibold">
+                        🏆 Best: {bestTimes[index].toFixed(2)}s
+                      </p>
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={() => startGame(index)}
+                    className="group relative w-full px-8 py-3 bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 rounded-xl text-white font-bold text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/40 active:scale-95"
+                  >
+                    <span className="relative z-10">PLAY LEVEL</span>
+                    <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl blur-xl"></div>
+                  </button>
+                </div>
+              ))}
+            </div>
+            
+            {/* Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-white/10">
+                <div className="text-cyan-300 font-semibold mb-2">MOVEMENT</div>
+                <div className="text-gray-300">WASD or Arrow Keys</div>
+              </div>
+              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-white/10">
+                <div className="text-purple-300 font-semibold mb-2">JUMP</div>
+                <div className="text-gray-300">SPACE</div>
+              </div>
+              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-white/10">
+                <div className="text-yellow-300 font-semibold mb-2">OBJECTIVE</div>
+                <div className="text-gray-300">Reach the finish!</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Corner decorations */}
+        <div className="absolute top-8 left-8 w-20 h-20 border-l-2 border-t-2 border-cyan-400/50 rounded-tl-lg"></div>
+        <div className="absolute top-8 right-8 w-20 h-20 border-r-2 border-t-2 border-purple-400/50 rounded-tr-lg"></div>
+        <div className="absolute bottom-8 left-8 w-20 h-20 border-l-2 border-b-2 border-cyan-400/50 rounded-bl-lg"></div>
+        <div className="absolute bottom-8 right-8 w-20 h-20 border-r-2 border-b-2 border-purple-400/50 rounded-br-lg"></div>
+      </div>
+    );
+  }
+
+  if (gameState === 'finished') {
+    return (
+      <div className="w-full h-screen bg-gradient-to-b from-green-400 to-green-600 flex items-center justify-center">
+        <div className="text-center text-white">
+          <h1 className="text-6xl font-bold mb-4">Level Complete!</h1>
+          <h2 className="text-3xl mb-4">{GAME_LEVELS[currentLevel].name}</h2>
+          <p className="text-2xl mb-2">Time: {time.toFixed(2)}s</p>
+          {bestTimes[currentLevel] === time && (
+            <p className="text-yellow-300 text-xl mb-8">🎉 NEW BEST TIME! 🎉</p>
+          )}
+          
+          <div className="space-x-4">
+            <button
+              onClick={restartLevel}
+              className="px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-semibold"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={backToMenu}
+              className="px-6 py-3 bg-gray-500 hover:bg-gray-600 rounded-lg text-white font-semibold"
+            >
+              Main Menu
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full h-screen">
+      <div ref={mountRef} className="w-full h-full" />
+      
+      {/* Game UI */}
+      <div className="absolute top-4 left-4 text-white bg-black bg-opacity-50 rounded-lg p-4">
+        <h3 className="text-xl font-bold">{GAME_LEVELS[currentLevel].name}</h3>
+        <p className="text-lg">Time: {time.toFixed(2)}s</p>
+        {bestTimes[currentLevel] && (
+          <p className="text-yellow-300">Best: {bestTimes[currentLevel].toFixed(2)}s</p>
+        )}
+      </div>
+      
+      <div className="absolute top-4 right-4">
+        <button
+          onClick={backToMenu}
+          className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg text-white font-semibold"
+        >
+          Menu
+        </button>
+      </div>
+      
+      <div className="absolute bottom-4 left-4 text-white bg-black bg-opacity-50 rounded-lg p-4">
+        <p>WASD/Arrows: Move</p>
+        <p>SPACE: Jump</p>
+      </div>
+    </div>
+  );
+};
+
+export default MarbleGame;
