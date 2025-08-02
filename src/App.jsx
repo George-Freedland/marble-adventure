@@ -1014,13 +1014,16 @@ const MarbleGame = () => {
         </button>
       </div>
       
-      <div className="absolute bottom-4 left-4 text-white bg-black bg-opacity-50 rounded-lg p-4">
-        <p>WASD/Arrows: Move</p>
-        <p>J: Jump</p>
-        <p className={canJumpDisplay ? "text-green-400" : "text-red-400"}>
-          Jump: {canJumpDisplay ? "Available" : "Disabled"}
-        </p>
-      </div>
+      {/* Instructions Panel - Hide on mobile landscape when touch controls are visible */}
+      {!(isMobile && !isPortrait && gameState === 'playing') && (
+        <div className="absolute bottom-4 left-4 text-white bg-black bg-opacity-50 rounded-lg p-4">
+          <p>WASD/Arrows: Move</p>
+          <p>J: Jump</p>
+          <p className={canJumpDisplay ? "text-green-400" : "text-red-400"}>
+            Jump: {canJumpDisplay ? "Available" : "Disabled"}
+          </p>
+        </div>
+      )}
 
       {/* Level Complete Overlay */}
       {gameState === 'finished' && (() => {
@@ -1079,7 +1082,7 @@ const MarbleGame = () => {
                 className="w-8 h-8 bg-white/60 rounded-full transition-transform duration-75"
                 style={{
                   transform: mobileControls.isJoystickActive 
-                    ? `translate(${mobileControls.movement.x * 20}px, ${mobileControls.movement.y * 20}px)`
+                    ? `translate(${mobileControls.movement.x * 20}px, ${-mobileControls.movement.y * 20}px)`
                     : 'translate(0px, 0px)'
                 }}
               />
