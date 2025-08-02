@@ -395,6 +395,8 @@ const MarbleGame = () => {
         const distance = marblePos.distanceTo(finishPos);
         
         if (distance < 3 && !gameStateRef.current.finished) {
+          // Stop the marble immediately when finishing
+          gameStateRef.current.velocity.set(0, 0, 0);
           gameStateRef.current.finished = true;
           const finalTime = (Date.now() - gameStateRef.current.startTime) / 1000;
           setTime(finalTime);
@@ -403,9 +405,13 @@ const MarbleGame = () => {
             [currentLevel]: prev[currentLevel] ? Math.min(prev[currentLevel], finalTime) : finalTime
           }));
           setGameState('finished');
+          console.log('Level completed! Marble frozen at finish.');
         }
       }
     });
+
+    // Don't handle platform collision or movement if game is finished
+    if (gameStateRef.current.finished) return;
 
     // Handle platform collision
     if (closestPlatform) {
@@ -451,8 +457,8 @@ const MarbleGame = () => {
     }
     gameStateRef.current.onGround = onPlatform;
 
-    // Fall detection - more forgiving
-    if (marblePos.y < -5) {
+    // Fall detection - more forgiving (but don't reset if game is finished)
+    if (marblePos.y < -5 && !gameStateRef.current.finished) {
       resetMarble();
     }
   }, [currentLevel, setBestTimes, setTime, setGameState, resetMarble, setCanJumpDisplay]);
@@ -536,9 +542,9 @@ const MarbleGame = () => {
 
 
 
-  // Load level when currentLevel or gameState changes
+  // Load level when currentLevel changes or when entering playing state
   useEffect(() => {
-    if (sceneRef.current && rendererRef.current) {
+    if (gameState === 'playing' && sceneRef.current && rendererRef.current) {
       console.log('Loading level:', currentLevel, 'gameState:', gameState);
       loadLevel();
     }
