@@ -3,11 +3,16 @@ import * as THREE from 'three';
 
 // Move levels outside component to prevent recreation on every render
 const GAME_LEVELS = [
+  null, // Index 0 reserved for menu state
   {
     name: "Test Level",
     platforms: [
       // Simple large platform for testing - made smaller and positioned better
       { pos: [0, 0, 5], size: [15, 1, 15], color: 0x4a90e2 },
+      // Add some small platforms to test the improved jumping
+      { pos: [5, 1, 10], size: [2, 1, 2], color: 0xf39c12 }, // Small platform
+      { pos: [-5, 2, 12], size: [1.5, 1, 1.5], color: 0xe74c3c }, // Very small platform
+      { pos: [0, 3, 8], size: [0.8, 1, 0.8], color: 0x9b59b6 }, // Extremely tiny platform
     ],
     start: [0, 2, -5], // Start in front of platform
     finish: [0, 2, 15], // Finish behind platform
@@ -35,14 +40,19 @@ const GAME_LEVELS = [
       { pos: [15, 0, 15], size: [6, 1, 6], color: 0x2ecc71 },
       { pos: [-15, 0, 30], size: [6, 1, 6], color: 0x2ecc71 },
       { pos: [20, 3, 45], size: [4, 1, 4], color: 0xe74c3c },
+      
+      // Convert red pillars to jumpable platforms
+      { pos: [3, 1.5, 8], size: [1, 1, 1], color: 0xe74c3c },
+      { pos: [-3, 1.5, 22], size: [1, 1, 1], color: 0xe74c3c },
+      { pos: [2, 4.5, 35], size: [1, 1, 1], color: 0xe74c3c },
     ],
     start: [0, 2, -5],
     finish: [0, 2, 70],
     obstacles: [
-      // Some obstacles to make it interesting
-      { pos: [3, 1, 8], size: [1, 2, 1], color: 0xe74c3c },
-      { pos: [-3, 1, 22], size: [1, 2, 1], color: 0xe74c3c },
-      { pos: [2, 4, 35], size: [1, 2, 1], color: 0xe74c3c },
+      // Keep base of pillars as obstacles for visual effect
+      { pos: [3, 0.5, 8], size: [1, 1, 1], color: 0xe74c3c },
+      { pos: [-3, 0.5, 22], size: [1, 1, 1], color: 0xe74c3c },
+      { pos: [2, 3.5, 35], size: [1, 1, 1], color: 0xe74c3c },
     ]
   }
 ];
@@ -59,19 +69,31 @@ const MarbleGame = () => {
     onGround: false,
     startTime: null,
     finished: false,
-    canJump: true
+    canJump: true,
+    lastGroundTime: 0 // Track when we were last on ground for coyote time
   });
   
   const [gameState, setGameState] = useState('menu');
   const [currentLevel, setCurrentLevel] = useState(0);
   const [time, setTime] = useState(0);
-  const [bestTimes, setBestTimes] = useState({ 0: null, 1: null });
+  const [bestTimes, setBestTimes] = useState({ 1: null, 2: null }); // Level 1 = Test Level, Level 2 = Marble Adventure
+  const [canJumpDisplay, setCanJumpDisplay] = useState(true);
 
   const loadLevel = useCallback(() => {
     const scene = sceneRef.current;
-    if (!scene) return;
+    const renderer = rendererRef.current;
+    if (!scene || !renderer) {
+      console.log('Scene or renderer not ready for level loading, scene:', !!scene, 'renderer:', !!renderer);
+      return;
+    }
 
     const level = GAME_LEVELS[currentLevel];
+    if (!level) {
+      console.log('No level at index:', currentLevel, '(likely menu state)');
+      return;
+    }
+    
+    console.log('Loading level:', currentLevel, level.name);
 
     // Clear existing level
     const objectsToRemove = scene.children.filter(child => 
@@ -164,7 +186,8 @@ const MarbleGame = () => {
       onGround: false,
       startTime: null,
       finished: false,
-      canJump: true
+      canJump: true,
+      lastGroundTime: Date.now()
     };
 
     // Position camera
@@ -222,7 +245,9 @@ const MarbleGame = () => {
     pointLight2.position.set(-15, 5, 30);
     scene.add(pointLight2);
 
-    loadLevel();
+    // Scene initialization complete
+    console.log('Scene initialization complete');
+    loadLevel(); // This will handle the case where currentLevel=0 gracefully
   }, [loadLevel]);
 
   const updateCamera = useCallback(() => {
@@ -251,10 +276,13 @@ const MarbleGame = () => {
     if (!marble) return;
 
     const level = GAME_LEVELS[currentLevel];
+    if (!level) return; // No level to reset to (menu state)
+    
     marble.position.set(...level.start);
     gameStateRef.current.velocity.set(0, 0, 0);
     gameStateRef.current.startTime = Date.now();
     gameStateRef.current.canJump = true;
+    gameStateRef.current.lastGroundTime = Date.now();
   }, [currentLevel]);
 
   const checkCollisions = useCallback(() => {
@@ -267,16 +295,17 @@ const MarbleGame = () => {
     let onPlatform = false;
     let closestPlatform = null;
     let minDistance = Infinity;
+    let nearAnyPlatform = false;
 
     scene.children.forEach(child => {
       if (child.userData.isPlatform) {
         const platformPos = child.position;
-        const platformSize = child.geometry.parameters;
+        const platformGeometry = child.geometry.parameters;
         
         // Check if marble is above platform
-        const halfHeight = platformSize.height / 2;
-        const halfWidth = platformSize.width / 2;
-        const halfDepth = platformSize.depth / 2;
+        const halfHeight = platformGeometry.height / 2;
+        const halfWidth = platformGeometry.width / 2;
+        const halfDepth = platformGeometry.depth / 2;
         
         const platformTop = platformPos.y + halfHeight;
         const platformLeft = platformPos.x - halfWidth;
@@ -284,7 +313,42 @@ const MarbleGame = () => {
         const platformFront = platformPos.z - halfDepth;
         const platformBack = platformPos.z + halfDepth;
         
-        // Check if marble is within platform bounds
+        // Extra generous bounds checking for very small platforms
+        const platformSize = Math.min(halfWidth, halfDepth);
+        let jumpBuffer;
+        if (platformSize < 1.5) {
+          // For very small platforms, be extremely generous
+          jumpBuffer = Math.max(2.0, platformSize * 1.5);
+        } else {
+          // For normal platforms, be more moderate
+          jumpBuffer = Math.max(1.0, platformSize * 0.6);
+        }
+        const extendedLeft = platformPos.x - halfWidth - jumpBuffer;
+        const extendedRight = platformPos.x + halfWidth + jumpBuffer;
+        const extendedFront = platformPos.z - halfDepth - jumpBuffer;
+        const extendedBack = platformPos.z + halfDepth + jumpBuffer;
+        
+        // Check if marble is within generous platform bounds for jumping
+        if (marblePos.x >= extendedLeft && marblePos.x <= extendedRight &&
+            marblePos.z >= extendedFront && marblePos.z <= extendedBack) {
+          
+          const distance = marblePos.y - platformTop;
+          // Extra forgiving for very small platforms
+          let maxDistance = platformSize < 1.5 ? 1.8 : 1.2; // More generous for small platforms
+          if (distance <= maxDistance && distance >= -0.5) {
+            nearAnyPlatform = true;
+          }
+        }
+        
+        // Additional check: if it's a very small platform, also check by simple distance
+        if (platformSize < 1.5) {
+          const distanceToCenter = marblePos.distanceTo(platformPos);
+          if (distanceToCenter < 2.5 && marblePos.y >= platformTop - 1.0 && marblePos.y <= platformTop + 1.8) {
+            nearAnyPlatform = true;
+          }
+        }
+        
+        // Check if marble is within strict platform bounds for actual collision
         if (marblePos.x >= platformLeft && marblePos.x <= platformRight &&
             marblePos.z >= platformFront && marblePos.z <= platformBack) {
           
@@ -301,11 +365,11 @@ const MarbleGame = () => {
 
       if (child.userData.isObstacle) {
         const obstaclePos = child.position;
-        const obstacleSize = child.geometry.parameters;
+        const obstacleGeometry = child.geometry.parameters;
         
-        const halfHeight = obstacleSize.height / 2;
-        const halfWidth = obstacleSize.width / 2;
-        const halfDepth = obstacleSize.depth / 2;
+        const halfHeight = obstacleGeometry.height / 2;
+        const halfWidth = obstacleGeometry.width / 2;
+        const halfDepth = obstacleGeometry.depth / 2;
         
         const obstacleTop = obstaclePos.y + halfHeight;
         const obstacleBottom = obstaclePos.y - halfHeight;
@@ -348,54 +412,50 @@ const MarbleGame = () => {
       const platformTop = closestPlatform.position.y + closestPlatform.geometry.parameters.height / 2;
       
       // Keep marble on platform
-      if (marblePos.y - marbleRadius <= platformTop + 0.2) { // More generous collision bounds
+      if (marblePos.y - marbleRadius <= platformTop + 0.3) { // Slightly more generous collision bounds
         marblePos.y = platformTop + marbleRadius;
         
         // More responsive jump reset - allow jumping even with small downward velocity
-        if (gameStateRef.current.velocity.y <= 0.5) { // Increased from 0.2 to 0.5
-          gameStateRef.current.velocity.y = Math.max(0, gameStateRef.current.velocity.y * 0.1); // Dampen but don't zero out
+        if (gameStateRef.current.velocity.y <= 1.0) { // Even more forgiving
+          gameStateRef.current.velocity.y = Math.max(0, gameStateRef.current.velocity.y * 0.1);
           onPlatform = true;
+          gameStateRef.current.lastGroundTime = Date.now(); // Update last ground time
         }
       }
-      
-      // Much more forgiving jump detection - allow jumping when near any platform
-      if (marblePos.y - marbleRadius <= platformTop + 0.8) { // Increased from 0.5 to 0.8
-        gameStateRef.current.canJump = true;
-      }
     }
 
-    // Also check if we're close to ANY platform for jumping (not just closest)
-    let canJumpFromAnyPlatform = false;
-    scene.children.forEach(child => {
-      if (child.userData.isPlatform) {
-        const platformPos = child.position;
-        const platformSize = child.geometry.parameters;
-        const platformTop = platformPos.y + platformSize.height / 2;
-        
-        // Very generous jump detection for all platforms - even more forgiving
-        if (marblePos.y - marbleRadius <= platformTop + 1.0) { // Increased from 0.6 to 1.0
-          canJumpFromAnyPlatform = true;
-        }
-      }
-    });
-
-    // Set canJump if we're near any platform
-    if (canJumpFromAnyPlatform) {
+    // More balanced jump logic - near platform OR very recent coyote time
+    const coyoteTime = 150; // Shorter 150ms grace period after leaving ground
+    const timeSinceGround = Date.now() - gameStateRef.current.lastGroundTime;
+    
+    // Only allow jumping if:
+    // 1. Currently on a platform, OR
+    // 2. Near a platform (within reasonable distance), OR  
+    // 3. Very recently left a platform (coyote time) AND not falling too fast
+    if (onPlatform || nearAnyPlatform || (timeSinceGround < coyoteTime && gameStateRef.current.velocity.y > -5)) {
       gameStateRef.current.canJump = true;
+      setCanJumpDisplay(true);
+      // Debug log for small platform detection
+      if (nearAnyPlatform && !onPlatform) {
+        console.log('Near small platform - jump enabled');
+      }
+    } else {
+      // If none of the above conditions are met, disable jumping
+      gameStateRef.current.canJump = false;
+      setCanJumpDisplay(false);
     }
 
-    // Additional responsiveness: if we're on ground, always allow jumping
-    if (gameStateRef.current.onGround) {
-      gameStateRef.current.canJump = true;
+    // Update onGround state
+    if (onPlatform) {
+      gameStateRef.current.lastGroundTime = Date.now();
     }
-
     gameStateRef.current.onGround = onPlatform;
 
     // Fall detection - more forgiving
     if (marblePos.y < -5) {
       resetMarble();
     }
-  }, [currentLevel, setBestTimes, setTime, setGameState, resetMarble]);
+  }, [currentLevel, setBestTimes, setTime, setGameState, resetMarble, setCanJumpDisplay]);
 
   const updatePhysics = useCallback(() => {
     const marble = marbleRef.current;
@@ -433,10 +493,11 @@ const MarbleGame = () => {
   const handleKeyDown = useCallback((event) => {
     keysRef.current[event.key.toLowerCase()] = true;
     
-    if (gameState === 'playing' && event.key.toLowerCase() === 'j') {
-      if (gameStateRef.current.onGround && gameStateRef.current.canJump) {
+    if (gameState === 'playing' && !gameStateRef.current.finished && event.key.toLowerCase() === 'j') {
+      // Only allow jumping if we can jump (this gets set by collision detection)
+      if (gameStateRef.current.canJump) {
         gameStateRef.current.velocity.y = 18.9; // 1.75x higher jump (was 10.8, now 10.8 * 1.75)
-        gameStateRef.current.canJump = false;
+        gameStateRef.current.canJump = false; // Disable jumping until collision detection re-enables it
         console.log('Jump activated!');
       }
       event.preventDefault();
@@ -448,7 +509,7 @@ const MarbleGame = () => {
   }, []);
 
   const handleInput = useCallback(() => {
-    if (gameState !== 'playing') return;
+    if (gameState !== 'playing' || gameStateRef.current.finished) return;
 
     const state = gameStateRef.current;
     const force = 0.2; // Very slightly faster overall speed (was 0.195)
@@ -474,6 +535,14 @@ const MarbleGame = () => {
   }, [gameState]);
 
 
+
+  // Load level when currentLevel or gameState changes
+  useEffect(() => {
+    if (sceneRef.current && rendererRef.current) {
+      console.log('Loading level:', currentLevel, 'gameState:', gameState);
+      loadLevel();
+    }
+  }, [currentLevel, gameState, loadLevel]);
 
   useEffect(() => {
     initGame();
@@ -514,9 +583,12 @@ const MarbleGame = () => {
       // Limit updates to 60 FPS max
       if (currentTime - lastTime > 16) {
         if (gameState === 'playing') {
-          handleInput();
-          updatePhysics();
-          checkCollisions();
+          // Only run game logic if not finished
+          if (!gameStateRef.current.finished) {
+            handleInput();
+            updatePhysics();
+            checkCollisions();
+          }
           updateCamera();
           
           // Update timer less frequently to avoid flickering
@@ -535,11 +607,11 @@ const MarbleGame = () => {
     animate();
   }, [gameState, handleInput, updatePhysics, checkCollisions, updateCamera]);
 
-  const startGame = (levelIndex = 0) => {
+  const startGame = (levelIndex = 1) => {
+    console.log('Starting game with level index:', levelIndex);
     setCurrentLevel(levelIndex);
     setGameState('playing');
     setTime(0);
-    setTimeout(() => loadLevel(), 100);
   };
 
   const restartLevel = () => {
@@ -550,7 +622,18 @@ const MarbleGame = () => {
 
   const backToMenu = () => {
     setGameState('menu');
+    setCurrentLevel(0); // Reset to menu state
     setTime(0);
+  };
+
+  const nextLevel = () => {
+    const nextLevelIndex = currentLevel + 1;
+    if (nextLevelIndex < GAME_LEVELS.length && GAME_LEVELS[nextLevelIndex]) {
+      startGame(nextLevelIndex);
+    } else {
+      // No more levels, go back to menu
+      backToMenu();
+    }
   };
 
   if (gameState === 'menu') {
@@ -603,33 +686,38 @@ const MarbleGame = () => {
             
             {/* Level Selection */}
             <div className="space-y-4 mb-8">
-              {GAME_LEVELS.map((level, index) => (
-                <div key={index} className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-2xl shadow-purple-500/20">
-                  <div className="flex items-center justify-center mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-purple-500 rounded-full flex items-center justify-center shadow-lg">
-                      <div className="w-8 h-8 bg-white rounded-full shadow-inner"></div>
+              {GAME_LEVELS.map((level, index) => {
+                // Skip the null entry at index 0
+                if (!level) return null;
+                
+                return (
+                  <div key={index} className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-2xl shadow-purple-500/20">
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-purple-500 rounded-full flex items-center justify-center shadow-lg">
+                        <div className="w-8 h-8 bg-white rounded-full shadow-inner"></div>
+                      </div>
                     </div>
+                    
+                    <h3 className="text-2xl font-bold mb-3 text-cyan-300">{level.name}</h3>
+                    
+                    {bestTimes[index] && (
+                      <div className="bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-lg p-2 mb-4 border border-yellow-400/30">
+                        <p className="text-yellow-300 text-sm font-semibold">
+                          🏆 Best: {bestTimes[index].toFixed(2)}s
+                        </p>
+                      </div>
+                    )}
+                    
+                    <button
+                      onClick={() => startGame(index)}
+                      className="group relative w-full px-8 py-3 bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 rounded-xl text-white font-bold text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/40 active:scale-95"
+                    >
+                      <span className="relative z-10">PLAY LEVEL</span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl blur-xl"></div>
+                    </button>
                   </div>
-                  
-                  <h3 className="text-2xl font-bold mb-3 text-cyan-300">{level.name}</h3>
-                  
-                  {bestTimes[index] && (
-                    <div className="bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-lg p-2 mb-4 border border-yellow-400/30">
-                      <p className="text-yellow-300 text-sm font-semibold">
-                        🏆 Best: {bestTimes[index].toFixed(2)}s
-                      </p>
-                    </div>
-                  )}
-                  
-                  <button
-                    onClick={() => startGame(index)}
-                    className="group relative w-full px-8 py-3 bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 rounded-xl text-white font-bold text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/40 active:scale-95"
-                  >
-                    <span className="relative z-10">PLAY LEVEL</span>
-                    <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl blur-xl"></div>
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
             
             {/* Controls */}
@@ -660,17 +748,28 @@ const MarbleGame = () => {
   }
 
   if (gameState === 'finished') {
+    const nextLevelIndex = currentLevel + 1;
+    const hasNextLevel = nextLevelIndex < GAME_LEVELS.length && GAME_LEVELS[nextLevelIndex];
+    
     return (
       <div className="w-full h-screen bg-gradient-to-b from-green-400 to-green-600 flex items-center justify-center">
         <div className="text-center text-white">
           <h1 className="text-6xl font-bold mb-4">Level Complete!</h1>
-          <h2 className="text-3xl mb-4">{GAME_LEVELS[currentLevel].name}</h2>
+          <h2 className="text-3xl mb-4">{GAME_LEVELS[currentLevel]?.name}</h2>
           <p className="text-2xl mb-2">Time: {time.toFixed(2)}s</p>
           {bestTimes[currentLevel] === time && (
             <p className="text-yellow-300 text-xl mb-8">🎉 NEW BEST TIME! 🎉</p>
           )}
           
           <div className="space-x-4">
+            {hasNextLevel && (
+              <button
+                onClick={nextLevel}
+                className="px-6 py-3 bg-purple-500 hover:bg-purple-600 rounded-lg text-white font-semibold"
+              >
+                Next Level
+              </button>
+            )}
             <button
               onClick={restartLevel}
               className="px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-semibold"
@@ -695,7 +794,7 @@ const MarbleGame = () => {
       
       {/* Game UI */}
       <div className="absolute top-4 left-4 text-white bg-black bg-opacity-50 rounded-lg p-4">
-        <h3 className="text-xl font-bold">{GAME_LEVELS[currentLevel].name}</h3>
+        <h3 className="text-xl font-bold">{GAME_LEVELS[currentLevel]?.name}</h3>
         <p className="text-lg">Time: {time.toFixed(2)}s</p>
         {bestTimes[currentLevel] && (
           <p className="text-yellow-300">Best: {bestTimes[currentLevel].toFixed(2)}s</p>
@@ -714,6 +813,9 @@ const MarbleGame = () => {
       <div className="absolute bottom-4 left-4 text-white bg-black bg-opacity-50 rounded-lg p-4">
         <p>WASD/Arrows: Move</p>
         <p>J: Jump</p>
+        <p className={canJumpDisplay ? "text-green-400" : "text-red-400"}>
+          Jump: {canJumpDisplay ? "Available" : "Disabled"}
+        </p>
       </div>
     </div>
   );
