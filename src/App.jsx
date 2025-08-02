@@ -469,9 +469,9 @@ const MarbleGame = () => {
 
     const state = gameStateRef.current;
     
-    // Very slightly higher gravity
+    // Slightly increased gravity for more responsive feel
     if (!state.onGround) {
-      state.velocity.y -= 0.082; // Very slightly increased from 0.078
+      state.velocity.y -= 0.095; // Increased from 0.082 for better responsiveness
     }
 
     // Slightly more friction but still responsive
@@ -484,8 +484,8 @@ const MarbleGame = () => {
       state.velocity.z *= 0.94;
     }
 
-    // Much higher max speed for faster movement
-    const maxSpeed = 5.0;
+    // Higher max speed to match 1.4x movement increase
+    const maxSpeed = 7.0; // Increased from 5.0 (5.0 * 1.4)
     if (state.velocity.length() > maxSpeed) {
       state.velocity.normalize().multiplyScalar(maxSpeed);
     }
@@ -502,7 +502,7 @@ const MarbleGame = () => {
     if (gameState === 'playing' && !gameStateRef.current.finished && event.key.toLowerCase() === 'j') {
       // Only allow jumping if we can jump (this gets set by collision detection)
       if (gameStateRef.current.canJump) {
-        gameStateRef.current.velocity.y = 18.9; // 1.75x higher jump (was 10.8, now 10.8 * 1.75)
+        gameStateRef.current.velocity.y = 19.8; // Small increase from 18.9 for slightly higher jumps
         gameStateRef.current.canJump = false; // Disable jumping until collision detection re-enables it
         console.log('Jump activated!');
       }
@@ -518,7 +518,7 @@ const MarbleGame = () => {
     if (gameState !== 'playing' || gameStateRef.current.finished) return;
 
     const state = gameStateRef.current;
-    const force = 0.2; // Very slightly faster overall speed (was 0.195)
+    const force = 0.28; // 1.4x speed increase (was 0.2, now 0.2 * 1.4)
     const keys = keysRef.current;
 
     if (!state.startTime) {
