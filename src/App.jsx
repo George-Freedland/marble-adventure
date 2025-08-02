@@ -145,10 +145,53 @@ const MarbleGame = () => {
   const [gameState, setGameState] = useState('menu');
   const [currentLevel, setCurrentLevel] = useState(0);
   const [time, setTime] = useState(0);
-  const [bestTimes, setBestTimes] = useState({ 1: null, 2: null, 3: null }); // Level 1 = Getting Started, Level 2 = Call to Adventure, Level 3 = Belly of the Beast
   const [canJumpDisplay, setCanJumpDisplay] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isPortrait, setIsPortrait] = useState(false);
+
+  // localStorage helpers for best times persistence
+  // Storage key: 'marbleGameBestTimes' - stores {1: time, 2: time, 3: time} or null values
+  const loadBestTimes = () => {
+    try {
+      const saved = localStorage.getItem('marbleGameBestTimes');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Ensure we have the expected structure and valid numbers
+        const validTimes = {};
+        [1, 2, 3].forEach(level => {
+          if (parsed[level] && typeof parsed[level] === 'number' && parsed[level] > 0) {
+            validTimes[level] = parsed[level];
+          } else {
+            validTimes[level] = null;
+          }
+        });
+        return validTimes;
+      }
+    } catch (error) {
+      console.warn('Failed to load best times from localStorage:', error);
+    }
+    return { 1: null, 2: null, 3: null };
+  };
+
+  const saveBestTimes = (times) => {
+    try {
+      localStorage.setItem('marbleGameBestTimes', JSON.stringify(times));
+    } catch (error) {
+      console.warn('Failed to save best times to localStorage:', error);
+    }
+  };
+
+  const clearBestTimes = () => {
+    try {
+      localStorage.removeItem('marbleGameBestTimes');
+      setBestTimes({ 1: null, 2: null, 3: null });
+      console.log('Best times cleared!');
+    } catch (error) {
+      console.warn('Failed to clear best times:', error);
+    }
+  };
+
+  const [bestTimes, setBestTimes] = useState(loadBestTimes);
   
   // Mobile touch controls state
   const [mobileControls, setMobileControls] = useState({
@@ -180,6 +223,27 @@ const MarbleGame = () => {
     return () => {
       window.removeEventListener('resize', checkOrientation);
       window.removeEventListener('orientationchange', checkOrientation);
+    };
+  }, []);
+
+  // Save best times to localStorage whenever they change
+  useEffect(() => {
+    saveBestTimes(bestTimes);
+  }, [bestTimes]);
+
+  // Load best times on app start and expose reset function for development
+  useEffect(() => {
+    const loadedTimes = loadBestTimes();
+    const hasExistingTimes = Object.values(loadedTimes).some(time => time !== null);
+    if (hasExistingTimes) {
+      console.log('🏆 Loaded best times from localStorage:', loadedTimes);
+    }
+    
+    // Expose clear function for development/testing (accessible via browser console)
+    window.clearMarbleGameScores = clearBestTimes;
+    
+    return () => {
+      delete window.clearMarbleGameScores;
     };
   }, []);
 
@@ -504,10 +568,20 @@ const MarbleGame = () => {
           gameStateRef.current.finished = true;
           const finalTime = (Date.now() - gameStateRef.current.startTime) / 1000;
           setTime(finalTime);
-          setBestTimes(prev => ({
-            ...prev,
-            [currentLevel]: prev[currentLevel] ? Math.min(prev[currentLevel], finalTime) : finalTime
-          }));
+          setBestTimes(prev => {
+            const previousBest = prev[currentLevel];
+            const newBest = previousBest ? Math.min(previousBest, finalTime) : finalTime;
+            const isNewRecord = !previousBest || finalTime < previousBest;
+            
+            if (isNewRecord) {
+              console.log(`🎉 NEW BEST TIME! Level ${currentLevel}: ${finalTime.toFixed(2)}s`);
+            }
+            
+            return {
+              ...prev,
+              [currentLevel]: newBest
+            };
+          });
           setGameState('finished');
           console.log('Level completed! Marble frozen at finish.');
         }
@@ -546,9 +620,9 @@ const MarbleGame = () => {
       gameStateRef.current.canJump = true;
       setCanJumpDisplay(true);
       // Debug log for small platform detection
-      if (nearAnyPlatform && !onPlatform) {
-        console.log('Near small platform - jump enabled');
-      }
+      // if (nearAnyPlatform && !onPlatform) {
+        // console.log('Near small platform - jump enabled');
+      // }
     } else {
       // If none of the above conditions are met, disable jumping
       gameStateRef.current.canJump = false;
@@ -915,20 +989,35 @@ const MarbleGame = () => {
             </p>
             
             {/* Controls - more compact */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm mb-4">
-              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
-                <div className="text-cyan-300 font-semibold mb-1 text-xs">MOVEMENT</div>
-                <div className="text-gray-300 text-xs">WASD or Arrow Keys</div>
+            {isMobile ? (
+              // Mobile: Simplified two-column layout
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mb-4">
+                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
+                  <div className="text-cyan-300 font-semibold mb-1 text-xs">CONTROLS</div>
+                  <div className="text-gray-300 text-xs">Joystick + Jump</div>
+                </div>
+                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
+                  <div className="text-yellow-300 font-semibold mb-1 text-xs">OBJECTIVE</div>
+                  <div className="text-gray-300 text-xs">Reach the finish!</div>
+                </div>
               </div>
-              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
-                <div className="text-purple-300 font-semibold mb-1 text-xs">JUMP</div>
-                <div className="text-gray-300 text-xs">J</div>
+            ) : (
+              // Desktop: Three-column layout
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm mb-4">
+                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
+                  <div className="text-cyan-300 font-semibold mb-1 text-xs">MOVEMENT</div>
+                  <div className="text-gray-300 text-xs">WASD or Arrow Keys</div>
+                </div>
+                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
+                  <div className="text-purple-300 font-semibold mb-1 text-xs">JUMP</div>
+                  <div className="text-gray-300 text-xs">J</div>
+                </div>
+                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
+                  <div className="text-yellow-300 font-semibold mb-1 text-xs">OBJECTIVE</div>
+                  <div className="text-gray-300 text-xs">Reach the finish!</div>
+                </div>
               </div>
-              <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
-                <div className="text-yellow-300 font-semibold mb-1 text-xs">OBJECTIVE</div>
-                <div className="text-gray-300 text-xs">Reach the finish!</div>
-              </div>
-            </div>
+            )}
             
             {/* Level Selection */}
             <div className="space-y-2 pb-8">
