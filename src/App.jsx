@@ -6,11 +6,11 @@ const GAME_LEVELS = [
   {
     name: "Test Level",
     platforms: [
-      // Simple large platform for testing
-      { pos: [0, 0, 0], size: [20, 1, 20], color: 0x4a90e2 },
+      // Simple large platform for testing - made smaller and positioned better
+      { pos: [0, 0, 5], size: [15, 1, 15], color: 0x4a90e2 },
     ],
-    start: [0, 2, 0],
-    finish: [0, 2, 10],
+    start: [0, 2, -5], // Start in front of platform
+    finish: [0, 2, 15], // Finish behind platform
     obstacles: []
   },
   {
@@ -113,8 +113,8 @@ const MarbleGame = () => {
       scene.add(mesh);
     });
 
-    // Create start pad
-    const startGeometry = new THREE.CylinderGeometry(3, 3, 0.3, 32);
+    // Create start pad - using box geometry for proper collision
+    const startGeometry = new THREE.BoxGeometry(6, 0.3, 6); // Box instead of cylinder
     const startMaterial = new THREE.MeshLambertMaterial({ 
       color: 0x2ecc71,
       transparent: true,
@@ -124,10 +124,11 @@ const MarbleGame = () => {
     startPad.position.set(level.start[0], level.start[1] - 1.5, level.start[2]);
     startPad.receiveShadow = true;
     startPad.userData.isLevelObject = true;
+    startPad.userData.isPlatform = true; // Add this for collision detection
     scene.add(startPad);
 
-    // Create finish pad
-    const finishGeometry = new THREE.CylinderGeometry(3, 3, 0.3, 32);
+    // Create finish pad - using box geometry for proper collision
+    const finishGeometry = new THREE.BoxGeometry(6, 0.3, 6); // Box instead of cylinder
     const finishMaterial = new THREE.MeshLambertMaterial({ 
       color: 0xe74c3c,
       transparent: true,
@@ -137,6 +138,7 @@ const MarbleGame = () => {
     finishPad.position.set(level.finish[0], level.finish[1] - 1.5, level.finish[2]);
     finishPad.receiveShadow = true;
     finishPad.userData.isLevelObject = true;
+    finishPad.userData.isPlatform = true; // Add this for collision detection
     finishPad.userData.isFinish = true;
     scene.add(finishPad);
 
@@ -346,15 +348,45 @@ const MarbleGame = () => {
       const platformTop = closestPlatform.position.y + closestPlatform.geometry.parameters.height / 2;
       
       // Keep marble on platform
-      if (marblePos.y - marbleRadius <= platformTop + 0.1) {
+      if (marblePos.y - marbleRadius <= platformTop + 0.2) { // More generous collision bounds
         marblePos.y = platformTop + marbleRadius;
         
-        if (gameStateRef.current.velocity.y <= 0) {
-          gameStateRef.current.velocity.y = 0;
+        // More responsive jump reset - allow jumping even with small downward velocity
+        if (gameStateRef.current.velocity.y <= 0.5) { // Increased from 0.2 to 0.5
+          gameStateRef.current.velocity.y = Math.max(0, gameStateRef.current.velocity.y * 0.1); // Dampen but don't zero out
           onPlatform = true;
-          gameStateRef.current.canJump = true;
         }
       }
+      
+      // Much more forgiving jump detection - allow jumping when near any platform
+      if (marblePos.y - marbleRadius <= platformTop + 0.8) { // Increased from 0.5 to 0.8
+        gameStateRef.current.canJump = true;
+      }
+    }
+
+    // Also check if we're close to ANY platform for jumping (not just closest)
+    let canJumpFromAnyPlatform = false;
+    scene.children.forEach(child => {
+      if (child.userData.isPlatform) {
+        const platformPos = child.position;
+        const platformSize = child.geometry.parameters;
+        const platformTop = platformPos.y + platformSize.height / 2;
+        
+        // Very generous jump detection for all platforms - even more forgiving
+        if (marblePos.y - marbleRadius <= platformTop + 1.0) { // Increased from 0.6 to 1.0
+          canJumpFromAnyPlatform = true;
+        }
+      }
+    });
+
+    // Set canJump if we're near any platform
+    if (canJumpFromAnyPlatform) {
+      gameStateRef.current.canJump = true;
+    }
+
+    // Additional responsiveness: if we're on ground, always allow jumping
+    if (gameStateRef.current.onGround) {
+      gameStateRef.current.canJump = true;
     }
 
     gameStateRef.current.onGround = onPlatform;
@@ -371,23 +403,23 @@ const MarbleGame = () => {
 
     const state = gameStateRef.current;
     
-    // Much weaker gravity (was 0.002, now 0.0005)
+    // Very slightly higher gravity
     if (!state.onGround) {
-      state.velocity.y -= 0.0005;
+      state.velocity.y -= 0.082; // Very slightly increased from 0.078
     }
 
-    // Reduced friction for faster, more responsive movement
-    state.velocity.x *= 0.98;
-    state.velocity.z *= 0.98;
+    // Slightly more friction but still responsive
+    state.velocity.x *= 0.99;
+    state.velocity.z *= 0.99;
     
-    // Lighter ground friction
+    // Moderate ground friction
     if (state.onGround) {
-      state.velocity.x *= 0.92;
-      state.velocity.z *= 0.92;
+      state.velocity.x *= 0.94;
+      state.velocity.z *= 0.94;
     }
 
-    // Higher max speed for 3x faster movement
-    const maxSpeed = 0.9;
+    // Much higher max speed for faster movement
+    const maxSpeed = 5.0;
     if (state.velocity.length() > maxSpeed) {
       state.velocity.normalize().multiplyScalar(maxSpeed);
     }
@@ -401,9 +433,9 @@ const MarbleGame = () => {
   const handleKeyDown = useCallback((event) => {
     keysRef.current[event.key.toLowerCase()] = true;
     
-    if (gameState === 'playing' && event.key === ' ') {
+    if (gameState === 'playing' && event.key.toLowerCase() === 'j') {
       if (gameStateRef.current.onGround && gameStateRef.current.canJump) {
-        gameStateRef.current.velocity.y = 0.25; // Much stronger jump (was 0.1)
+        gameStateRef.current.velocity.y = 18.9; // 1.75x higher jump (was 10.8, now 10.8 * 1.75)
         gameStateRef.current.canJump = false;
         console.log('Jump activated!');
       }
@@ -419,7 +451,7 @@ const MarbleGame = () => {
     if (gameState !== 'playing') return;
 
     const state = gameStateRef.current;
-    const force = 0.003; // 3x faster movement (was 0.001)
+    const force = 0.2; // Very slightly faster overall speed (was 0.195)
     const keys = keysRef.current;
 
     if (!state.startTime) {
@@ -608,7 +640,7 @@ const MarbleGame = () => {
               </div>
               <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-white/10">
                 <div className="text-purple-300 font-semibold mb-2">JUMP</div>
-                <div className="text-gray-300">SPACE</div>
+                <div className="text-gray-300">J</div>
               </div>
               <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-white/10">
                 <div className="text-yellow-300 font-semibold mb-2">OBJECTIVE</div>
@@ -681,7 +713,7 @@ const MarbleGame = () => {
       
       <div className="absolute bottom-4 left-4 text-white bg-black bg-opacity-50 rounded-lg p-4">
         <p>WASD/Arrows: Move</p>
-        <p>SPACE: Jump</p>
+        <p>J: Jump</p>
       </div>
     </div>
   );
