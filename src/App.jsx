@@ -582,7 +582,7 @@ const MarbleGame = () => {
     state.velocity.x *= 0.99;
     state.velocity.z *= 0.99;
     
-    // Moderate ground friction
+    // Moderate ground frictionhow 
     if (state.onGround) {
       state.velocity.x *= 0.94;
       state.velocity.z *= 0.94;
@@ -869,9 +869,9 @@ const MarbleGame = () => {
 
   if (gameState === 'menu') {
     return (
-      <div className="fixed inset-0 w-screen h-screen overflow-auto">
-        {/* Animated background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+      <div className="fixed inset-0 w-screen h-screen overflow-y-auto">
+        {/* Animated background - fixed to viewport */}
+        <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-600/20 via-purple-600/20 to-transparent"></div>
           <div className="absolute inset-0 opacity-40">
             <div className="w-full h-full bg-repeat" style={{
@@ -881,7 +881,7 @@ const MarbleGame = () => {
         </div>
         
         {/* Floating particles effect */}
-        <div className="absolute inset-0 overflow-hidden">
+        <div className="fixed inset-0 overflow-hidden">
           {[...Array(20)].map((_, i) => (
             <div
               key={i}
@@ -896,9 +896,9 @@ const MarbleGame = () => {
           ))}
         </div>
         
-        {/* Main content */}
-        <div className="relative z-10 min-h-screen flex items-center justify-center py-2">
-          <div className="text-center text-white max-w-4xl mx-auto px-4 w-full">
+        {/* Main content - scrollable */}
+        <div className="relative z-10 min-h-screen py-4">
+          <div className="text-center text-white max-w-4xl mx-auto px-4">
             {/* Game title with glow effect - more compact */}
             <div className="mb-3">
               <h1 className="text-3xl md:text-4xl font-black mb-1 bg-gradient-to-r from-cyan-400 via-violet-400 to-purple-400 bg-clip-text text-transparent drop-shadow-2xl animate-pulse">
@@ -915,7 +915,7 @@ const MarbleGame = () => {
             </p>
             
             {/* Controls - more compact */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm mb-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm mb-4">
               <div className="bg-white/5 backdrop-blur-sm rounded-lg p-2 border border-white/10">
                 <div className="text-cyan-300 font-semibold mb-1 text-xs">MOVEMENT</div>
                 <div className="text-gray-300 text-xs">WASD or Arrow Keys</div>
@@ -930,8 +930,8 @@ const MarbleGame = () => {
               </div>
             </div>
             
-            {/* Level Selection - more compact */}
-            <div className="space-y-2">
+            {/* Level Selection */}
+            <div className="space-y-2 pb-8">
               {GAME_LEVELS.map((level, index) => {
                 // Skip the null entry at index 0
                 if (!level) return null;
@@ -969,18 +969,18 @@ const MarbleGame = () => {
         </div>
         
         {/* Corner decorations */}
-        <div className="absolute top-8 left-8 w-20 h-20 border-l-2 border-t-2 border-cyan-400/50 rounded-tl-lg"></div>
-        <div className="absolute top-8 right-8 w-20 h-20 border-r-2 border-t-2 border-purple-400/50 rounded-tr-lg"></div>
-        <div className="absolute bottom-8 left-8 w-20 h-20 border-l-2 border-b-2 border-cyan-400/50 rounded-bl-lg"></div>
-        <div className="absolute bottom-8 right-8 w-20 h-20 border-r-2 border-b-2 border-purple-400/50 rounded-br-lg"></div>
+        <div className="fixed top-8 left-8 w-20 h-20 border-l-2 border-t-2 border-cyan-400/50 rounded-tl-lg z-5"></div>
+        <div className="fixed top-8 right-8 w-20 h-20 border-r-2 border-t-2 border-purple-400/50 rounded-tr-lg z-5"></div>
+        <div className="fixed bottom-8 left-8 w-20 h-20 border-l-2 border-b-2 border-cyan-400/50 rounded-bl-lg z-5"></div>
+        <div className="fixed bottom-8 right-8 w-20 h-20 border-r-2 border-b-2 border-purple-400/50 rounded-br-lg z-5"></div>
       </div>
     );
   }
 
   return (
     <div className="relative w-full h-screen">
-      {/* Mobile Portrait Orientation Blocker */}
-      {isMobile && isPortrait && (
+      {/* Mobile Portrait Orientation Blocker - Only during gameplay */}
+      {isMobile && isPortrait && gameState === 'playing' && (
         <div className="fixed inset-0 bg-gradient-to-br from-purple-900 to-blue-900 flex flex-col items-center justify-center z-50 text-white text-center p-8">
           <div className="mb-8">
             <div className="w-20 h-20 border-4 border-white rounded-lg mb-4 mx-auto flex items-center justify-center">
