@@ -585,6 +585,8 @@ const MarbleGame = () => {
 
   useEffect(() => {
     let lastTime = 0;
+    let animationId;
+    
     const animate = (currentTime) => {
       // Limit updates to 60 FPS max
       if (currentTime - lastTime > 16) {
@@ -608,25 +610,65 @@ const MarbleGame = () => {
         }
         lastTime = currentTime;
       }
-      requestAnimationFrame(animate);
+      animationId = requestAnimationFrame(animate);
     };
-    animate();
+    
+    animationId = requestAnimationFrame(animate);
+    
+    // CRITICAL: Cancel the animation loop when component unmounts or dependencies change
+    return () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+    };
   }, [gameState, handleInput, updatePhysics, checkCollisions, updateCamera]);
 
   const startGame = (levelIndex = 1) => {
     console.log('Starting game with level index:', levelIndex);
+    
+    // Completely reset game state for consistent physics
+    gameStateRef.current = {
+      velocity: new THREE.Vector3(0, 0, 0),
+      onGround: false,
+      startTime: null,
+      finished: false,
+      canJump: true,
+      lastGroundTime: Date.now()
+    };
+    
     setCurrentLevel(levelIndex);
     setGameState('playing');
     setTime(0);
   };
 
   const restartLevel = () => {
+    // Completely reset game state for consistent physics
+    gameStateRef.current = {
+      velocity: new THREE.Vector3(0, 0, 0),
+      onGround: false,
+      startTime: null,
+      finished: false,
+      canJump: true,
+      lastGroundTime: Date.now()
+    };
+    
     setGameState('playing');
     setTime(0);
     resetMarble();
   };
 
   const backToMenu = () => {
+    // Clear keys and game state when going to menu
+    keysRef.current = {};
+    gameStateRef.current = {
+      velocity: new THREE.Vector3(0, 0, 0),
+      onGround: false,
+      startTime: null,
+      finished: false,
+      canJump: true,
+      lastGroundTime: Date.now()
+    };
+    
     setGameState('menu');
     setCurrentLevel(0); // Reset to menu state
     setTime(0);
@@ -753,47 +795,6 @@ const MarbleGame = () => {
     );
   }
 
-  if (gameState === 'finished') {
-    const nextLevelIndex = currentLevel + 1;
-    const hasNextLevel = nextLevelIndex < GAME_LEVELS.length && GAME_LEVELS[nextLevelIndex];
-    
-    return (
-      <div className="w-full h-screen bg-gradient-to-b from-green-400 to-green-600 flex items-center justify-center">
-        <div className="text-center text-white">
-          <h1 className="text-6xl font-bold mb-4">Level Complete!</h1>
-          <h2 className="text-3xl mb-4">{GAME_LEVELS[currentLevel]?.name}</h2>
-          <p className="text-2xl mb-2">Time: {time.toFixed(2)}s</p>
-          {bestTimes[currentLevel] === time && (
-            <p className="text-yellow-300 text-xl mb-8">🎉 NEW BEST TIME! 🎉</p>
-          )}
-          
-          <div className="space-x-4">
-            {hasNextLevel && (
-              <button
-                onClick={nextLevel}
-                className="px-6 py-3 bg-purple-500 hover:bg-purple-600 rounded-lg text-white font-semibold"
-              >
-                Next Level
-              </button>
-            )}
-            <button
-              onClick={restartLevel}
-              className="px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-semibold"
-            >
-              Try Again
-            </button>
-            <button
-              onClick={backToMenu}
-              className="px-6 py-3 bg-gray-500 hover:bg-gray-600 rounded-lg text-white font-semibold"
-            >
-              Main Menu
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="relative w-full h-screen">
       <div ref={mountRef} className="w-full h-full" />
@@ -823,6 +824,48 @@ const MarbleGame = () => {
           Jump: {canJumpDisplay ? "Available" : "Disabled"}
         </p>
       </div>
+
+      {/* Level Complete Overlay */}
+      {gameState === 'finished' && (() => {
+        const nextLevelIndex = currentLevel + 1;
+        const hasNextLevel = nextLevelIndex < GAME_LEVELS.length && GAME_LEVELS[nextLevelIndex];
+        
+        return (
+          <div className="absolute inset-0 bg-gradient-to-b from-green-400 to-green-600 bg-opacity-95 flex items-center justify-center z-50">
+            <div className="text-center text-white max-w-lg mx-auto px-8">
+              <h1 className="text-5xl font-bold mb-6 drop-shadow-lg">Level Complete!</h1>
+              <h2 className="text-2xl mb-4 drop-shadow-md">{GAME_LEVELS[currentLevel]?.name}</h2>
+              <p className="text-xl mb-4 drop-shadow-md">Time: {time.toFixed(2)}s</p>
+              {bestTimes[currentLevel] === time && (
+                <p className="text-yellow-300 text-lg mb-6 drop-shadow-md animate-pulse">🎉 NEW BEST TIME! 🎉</p>
+              )}
+              
+              <div className="flex flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-4 sm:justify-center">
+                {hasNextLevel && (
+                  <button
+                    onClick={nextLevel}
+                    className="px-6 py-3 bg-purple-500 hover:bg-purple-600 rounded-lg text-white font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+                  >
+                    Next Level
+                  </button>
+                )}
+                <button
+                  onClick={restartLevel}
+                  className="px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-lg text-white font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+                >
+                  Try Again
+                </button>
+                <button
+                  onClick={backToMenu}
+                  className="px-6 py-3 bg-gray-500 hover:bg-gray-600 rounded-lg text-white font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+                >
+                  Main Menu
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
